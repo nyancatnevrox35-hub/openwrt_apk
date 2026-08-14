@@ -76,14 +76,18 @@ jobs:
       - name: Build luci-app-ruijie_auth
         working-directory: sdk
         run: |
-          # 拉取 luci feed(luci.mk 来自该 feed);SDK 自带 feeds.conf.default
-          # 已按快照锁定 commit,update 会自动检出正确版本
-          ./scripts/feeds update luci
+          # 更新 luci 与 packages feed:luci.mk 来自 luci feed,
+          # 而 luci.mk 的构建依赖 luasrcdiet/host 来自 packages feed
+          ./scripts/feeds update luci packages
           # 放入应用并重建索引
           cp -r "$GITHUB_WORKSPACE/openwrt/luci-app-ruijie_auth" feeds/luci/applications/luci-app-ruijie_auth
           ./scripts/feeds update -i
-          ./scripts/feeds install -p luci -f luci-base luci-app-ruijie_auth
+          ./scripts/feeds install -f luci-base luci-app-ruijie_auth luasrcdiet
           make defconfig
+          # 先编译 lua / ucode,把 lua.h / ucode.h 装进 staging_dir,
+          # 否则 lucihttp 的 lua/ucode 绑定会因缺头文件编译失败
+          make package/lua/compile V=s
+          make package/ucode/compile V=s
           make package/luci-app-ruijie_auth/compile V=s
 
       - name: Collect packages
