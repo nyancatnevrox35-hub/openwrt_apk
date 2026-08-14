@@ -135,6 +135,37 @@ make package/luci-app-ruijie_auth/compile V=s
 3. 页面下方 **日志** 区域显示 `/var/log/ruijie_auth.log` 的最近 200 行，点击 **刷新** 更新。
 4. 语言切换：LuCI 系统设置（**系统 → 系统 → 语言和界面**）中选择 `简体中文` 或 `English`，本应用的界面文字随之切换。
 
+## 云端编译（GitHub Actions）
+
+无需本地 Linux 环境，直接在 GitHub 云端编译出 `.apk` 包。仓库内已包含工作流 `.github/workflows/build-apk.yml`，使用 ImmortalWrt 快照 SDK（已切换到 apk 包管理器）。
+
+**默认目标**：`mediatek/filogic`（MediaTek MT7981 / Filogic 820，如 Cudy TR3000，包架构 `aarch64_cortex-a53`）。
+
+### 触发方式
+
+- **自动**：向 `main` 分支推送（改动 `ruijie_auth.c`、`openwrt/` 或工作流本身时触发）。
+- **手动**：仓库页面 **Actions → Build OpenWrt apk packages → Run workflow**，可指定 `target` / `subtarget`（默认 `mediatek` / `filogic`）。
+
+### 下载产物
+
+编译完成后，在该次运行（run）页面底部的 **Artifacts** 下载 `ruijie-auth-<target>-<subtarget>-apk` 压缩包，内含：
+
+```
+ruijie_auth-1.0.0-r1.apk
+luci-app-ruijie_auth-1.0.0-r1.apk
+```
+
+### 安装
+
+```sh
+apk add --allow-untrusted ./ruijie_auth-1.0.0-r1.apk
+apk add --allow-untrusted ./luci-app-ruijie_auth-1.0.0-r1.apk
+```
+
+### 换架构
+
+要编译其他架构的包，手动触发时修改 `target` / `subtarget`（对应 `downloads.immortalwrt.org/snapshots/targets/<target>/<subtarget>/`）。例如 MT7621 设备用 `target=ramips`、`subtarget=mt7621`。
+
 ## 运行
 
 ### 前台运行（调试）

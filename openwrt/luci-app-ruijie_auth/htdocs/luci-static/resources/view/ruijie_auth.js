@@ -43,10 +43,7 @@ return view.extend({
 		o.rmempty = true;
 		o.depends('dhcp', '1');
 
-		var lines = (logdata || '').split('\n');
-		while (lines.length && !lines[lines.length - 1])
-			lines.pop();
-		var logBody = lines.length ? lines.slice(-200).join('\n') : _('No log output yet.');
+		var logBody = this.formatLog(logdata);
 
 		var logSection = E('div', { 'class': 'cbi-section' }, [
 			E('div', { 'class': 'cbi-section-title' }, _('Log')),
@@ -64,17 +61,23 @@ return view.extend({
 			'click': ui.createHandlerFn(this, 'handleRefresh')
 		}, _('Refresh'));
 
-		return E('div', {}, [ m.render(), logSection, refreshBtn ]);
+		return m.render().then(function(node) {
+			return E('div', {}, [ node, logSection, refreshBtn ]);
+		});
+	},
+
+	formatLog: function(data) {
+		var lines = (data || '').split('\n');
+		while (lines.length && !lines[lines.length - 1])
+			lines.pop();
+		return lines.length ? lines.slice(-200).join('\n') : _('No log output yet.');
 	},
 
 	handleRefresh: function() {
-		fs.read('/var/log/ruijie_auth.log').catch(function() { return ''; }).then(function(data) {
-			var lines = (data || '').split('\n');
-			while (lines.length && !lines[lines.length - 1])
-				lines.pop();
+		fs.read('/var/log/ruijie_auth.log').catch(function() { return ''; }).then(L.bind(function(data) {
 			var el = document.getElementById('ruijie-log');
 			if (el)
-				el.textContent = lines.length ? lines.slice(-200).join('\n') : _('No log output yet.');
-		});
+				el.textContent = this.formatLog(data);
+		}, this));
 	}
 });

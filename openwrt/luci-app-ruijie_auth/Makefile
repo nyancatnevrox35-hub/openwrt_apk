@@ -14,7 +14,7 @@ PKG_MAINTAINER:=nyancatnevrox35-hub <nyancatnevrox35-hub@users.noreply.github.co
 
 LUCI_TITLE:=Ruijie 802.1X Authentication
 LUCI_PKGARCH:=all
-LUCI_DEPENDS:=+ruijie_auth
+LUCI_DEPENDS:=+luci-base +ruijie_auth
 
 include ../../luci.mk
 
