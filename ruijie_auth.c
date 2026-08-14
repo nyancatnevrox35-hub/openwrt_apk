@@ -408,6 +408,46 @@ static int env_int(const char *name, int def) {
     return (int)r;
 }
 
+/* 检测物理链路是否 up:优先读 /sys carrier,回退 operstate,无法判定时按 up 处理 */
+static int link_is_up(const char *ifname) {
+    char path[128];
+    snprintf(path, sizeof(path), "/sys/class/net/%s/carrier", ifname);
+    FILE *f = fopen(path, "r");
+    if (f) {
+        int c = fgetc(f);
+        fclose(f);
+        return c == '1';
+    }
+    snprintf(path, sizeof(path), "/sys/class/net/%s/operstate", ifname);
+    f = fopen(path, "r");
+    if (f) {
+        char buf[16] = "";
+        fgets(buf, sizeof(buf), f);
+        fclose(f);
+        return strcmp(buf, "down\n") != 0;
+    }
+    return 1;
+}
+
+/* 将命令模板中的 %I 替换为接口名,返回 0 成功,-1 溢出 */
+static int expand_cmd(const char *tmpl, const char *ifname, char *out, size_t out_len) {
+    size_t o = 0;
+    for (const char *p = tmpl; *p; ) {
+        if (p[0] == '%' && p[1] == 'I') {
+            size_t n = strlen(ifname);
+            if (o + n + 1 > out_len) return -1;
+            memcpy(out + o, ifname, n);
+            o += n;
+            p += 2;
+        } else {
+            if (o + 1 >= out_len) return -1;
+            out[o++] = *p++;
+        }
+    }
+    out[o] = '\0';
+    return 0;
+}
+
 static void hexdump(const uint8_t *data, size_t len) {
     for (size_t offset = 0; offset < len; offset += 16) {
         printf("%04zx  ", offset);
@@ -915,6 +955,8 @@ typedef struct {
     int private_trailer;
     int start_trailer_enabled;
     const char *success_file;
+    char dhcp_cmd[512];
+    int dhcp_enabled;
 
     int sock;
     int sock_error;
@@ -1187,6 +1229,21 @@ static void mark_success(const char *path) {
     }
 }
 
+/* 认证成功后触发 DHCP(子进程执行,不阻塞认证主循环;SIGCHLD 已设为忽略) */
+static void run_dhcp(ruijie_client_t *c) {
+    if (!c->dhcp_enabled) return;
+    log_info("running DHCP command: %s", c->dhcp_cmd);
+    pid_t pid = fork();
+    if (pid < 0) {
+        log_warn("fork failed: %s", strerror(errno));
+        return;
+    }
+    if (pid == 0) {
+        execl("/bin/sh", "sh", "-c", c->dhcp_cmd, (char *)NULL);
+        _exit(127);
+    }
+}
+
 static const char *handle_request(ruijie_client_t *c, const eapol_frame_t *frame) {
     if (frame->eap_type == EAP_TYPE_IDENTITY) {
         send_identity(c, frame->eap_id);
@@ -1245,6 +1302,7 @@ static int authenticate_once(ruijie_client_t *c) {
         if (frame->eap_code == EAP_SUCCESS) {
             log_info("authentication success");
             mark_success(c->success_file);
+            run_dhcp(c);
             return 1;
         }
         if (frame->eap_code != EAP_REQUEST) continue;
@@ -1260,8 +1318,19 @@ static int monitor_session(ruijie_client_t *c) {
     log_info("entering session monitor");
     while (g_running) {
         if (c->sock_error) return -1;
+
+        /* 断链检测:等待链路恢复后返回 0 触发重新认证 */
+        if (!link_is_up(c->ifname)) {
+            log_warn("link down; waiting for link up before re-authentication");
+            while (g_running && !link_is_up(c->ifname)) {
+                struct timespec ts = {1, 0};
+                nanosleep(&ts, NULL);
+            }
+            return 0;
+        }
+
         eapol_frame_t *frame = NULL;
-        int rc = recv_frame(c, 30.0, &frame);
+        int rc = recv_frame(c, 5.0, &frame);
         if (rc < 0) return -1;
         if (rc == 0) continue;
         if (!frame->has_eap) continue;
@@ -1336,6 +1405,10 @@ typedef struct {
     int no_private_trailer;
     int debug;
     const char *success_file;
+    int daemon;
+    const char *log_file;
+    int dhcp;
+    const char *dhcp_cmd;
 } options_t;
 
 static void print_usage(const char *prog) {
@@ -1355,6 +1428,10 @@ static void print_usage(const char *prog) {
     printf("      --no-private-trailer    debug: standard EAP-MD5 without Ruijie trailer\n");
     printf("      --debug                 enable hex dumps\n");
     printf("      --success-file PATH     write this file after EAP Success (or RUIJIE_SUCCESS_FILE)\n");
+    printf("      --dhcp                  run DHCP after success (udhcpc -i IFACE -n -q)\n");
+    printf("      --dhcp-cmd CMD          run CMD after success (%%I = interface)\n");
+    printf("  -d, --daemon                detach and run in background\n");
+    printf("      --log-file PATH         append logs to PATH (default /dev/null with --daemon)\n");
     printf("  -h, --help                  show this help\n");
 }
 
@@ -1371,6 +1448,10 @@ static int parse_args(int argc, char *argv[], options_t *opts) {
     opts->no_private_trailer = 0;
     opts->debug = 0;
     opts->success_file = getenv("RUIJIE_SUCCESS_FILE");
+    opts->daemon = 0;
+    opts->log_file = NULL;
+    opts->dhcp = 0;
+    opts->dhcp_cmd = NULL;
 
     static struct option long_options[] = {
         {"interface", required_argument, 0, 'i'},
@@ -1384,13 +1465,17 @@ static int parse_args(int argc, char *argv[], options_t *opts) {
         {"no-private-trailer", no_argument, 0, 0},
         {"debug", no_argument, 0, 0},
         {"success-file", required_argument, 0, 0},
+        {"dhcp", no_argument, 0, 0},
+        {"dhcp-cmd", required_argument, 0, 0},
+        {"daemon", no_argument, 0, 'd'},
+        {"log-file", required_argument, 0, 0},
         {"help", no_argument, 0, 'h'},
         {0, 0, 0, 0}
     };
 
     int option_index = 0;
     int c;
-    while ((c = getopt_long(argc, argv, "hi:u:p:m:", long_options, &option_index)) != -1) {
+    while ((c = getopt_long(argc, argv, "hi:u:p:m:d", long_options, &option_index)) != -1) {
         switch (c) {
             case 'h':
                 print_usage(argv[0]);
@@ -1406,6 +1491,9 @@ static int parse_args(int argc, char *argv[], options_t *opts) {
                 break;
             case 'm':
                 opts->mac = optarg;
+                break;
+            case 'd':
+                opts->daemon = 1;
                 break;
             case 0: {
                 const char *name = long_options[option_index].name;
@@ -1423,6 +1511,12 @@ static int parse_args(int argc, char *argv[], options_t *opts) {
                     opts->debug = 1;
                 } else if (strcmp(name, "success-file") == 0) {
                     opts->success_file = optarg;
+                } else if (strcmp(name, "dhcp") == 0) {
+                    opts->dhcp = 1;
+                } else if (strcmp(name, "dhcp-cmd") == 0) {
+                    opts->dhcp_cmd = optarg;
+                } else if (strcmp(name, "log-file") == 0) {
+                    opts->log_file = optarg;
                 }
                 break;
             }
@@ -1485,6 +1579,24 @@ int main(int argc, char *argv[]) {
     client.start_trailer_enabled = (!opts.no_start_trailer && !opts.no_private_trailer);
     client.success_file = opts.success_file;
 
+    /* DHCP 触发命令:--dhcp-cmd 优先,否则 --dhcp 用默认 udhcpc */
+    client.dhcp_enabled = 0;
+    {
+        const char *tmpl = opts.dhcp_cmd;
+        char def_tmpl[64];
+        if (!tmpl && opts.dhcp) {
+            snprintf(def_tmpl, sizeof(def_tmpl), "udhcpc -i %%I -n -q");
+            tmpl = def_tmpl;
+        }
+        if (tmpl) {
+            if (expand_cmd(tmpl, client.ifname, client.dhcp_cmd, sizeof(client.dhcp_cmd)) < 0) {
+                log_error("dhcp command too long");
+                return 1;
+            }
+            client.dhcp_enabled = 1;
+        }
+    }
+
     if (opts.mac) {
         if (parse_mac(opts.mac, client.local_mac) < 0) {
             log_error("invalid MAC address: %s", opts.mac);
@@ -1503,6 +1615,32 @@ int main(int argc, char *argv[]) {
     sigemptyset(&sa.sa_mask);
     sigaction(SIGINT, &sa, NULL);
     sigaction(SIGTERM, &sa, NULL);
+    signal(SIGCHLD, SIG_IGN); /* 自动回收 DHCP 子进程,避免僵尸 */
+
+    /* 日志重定向 + 守护化 */
+    if (opts.daemon || opts.log_file) {
+        const char *target = opts.log_file ? opts.log_file : "/dev/null";
+        int flags = opts.log_file ? (O_WRONLY | O_CREAT | O_APPEND) : O_RDWR;
+        int log_fd = open(target, flags, 0644);
+        if (log_fd < 0) {
+            log_error("cannot open %s: %s", target, strerror(errno));
+            return 1;
+        }
+        if (opts.daemon) {
+            pid_t pid = fork();
+            if (pid < 0) { log_error("fork failed: %s", strerror(errno)); return 1; }
+            if (pid > 0) _exit(0); /* 父进程退出 */
+            if (setsid() < 0) { log_error("setsid failed: %s", strerror(errno)); return 1; }
+            pid = fork();
+            if (pid < 0) { log_error("fork failed: %s", strerror(errno)); return 1; }
+            if (pid > 0) _exit(0);
+            umask(0);
+        }
+        dup2(log_fd, STDIN_FILENO);
+        dup2(log_fd, STDOUT_FILENO);
+        dup2(log_fd, STDERR_FILENO);
+        if (log_fd > STDERR_FILENO) close(log_fd);
+    }
 
     run_forever(&client);
     return 0;
