@@ -306,6 +306,7 @@ static void log_info(const char *fmt, ...) {
     vprintf(fmt, ap);
     va_end(ap);
     putchar('\n');
+    fflush(stdout);
 }
 
 static void log_warn(const char *fmt, ...) {
@@ -316,6 +317,7 @@ static void log_warn(const char *fmt, ...) {
     vprintf(fmt, ap);
     va_end(ap);
     putchar('\n');
+    fflush(stdout);
 }
 
 static void log_error(const char *fmt, ...) {
@@ -326,6 +328,7 @@ static void log_error(const char *fmt, ...) {
     vprintf(fmt, ap);
     va_end(ap);
     putchar('\n');
+    fflush(stdout);
 }
 
 static void log_debug(const char *fmt, ...) {
@@ -337,6 +340,7 @@ static void log_debug(const char *fmt, ...) {
     vprintf(fmt, ap);
     va_end(ap);
     putchar('\n');
+    fflush(stdout);
 }
 
 /* ---------------- 工具函数 ---------------- */

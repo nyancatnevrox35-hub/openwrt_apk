@@ -1,0 +1,45 @@
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+
+msgid "Ruijie Auth"
+msgstr "锐捷认证"
+
+msgid "Ruijie Authentication"
+msgstr "锐捷认证"
+
+msgid "Configure the Ruijie 802.1X EAP-MD5 authentication client."
+msgstr "配置锐捷 802.1X EAP-MD5 认证客户端。"
+
+msgid "Enabled"
+msgstr "启用"
+
+msgid "Interface"
+msgstr "接口"
+
+msgid "Username"
+msgstr "用户名"
+
+msgid "Password"
+msgstr "密码"
+
+msgid "MAC address"
+msgstr "MAC 地址"
+
+msgid "Run DHCP after success"
+msgstr "认证成功后运行 DHCP"
+
+msgid "DHCP command"
+msgstr "DHCP 命令"
+
+msgid "Log"
+msgstr "日志"
+
+msgid "Recent authentication log output."
+msgstr "最近的认证日志输出。"
+
+msgid "Refresh"
+msgstr "刷新"
+
+msgid "No log output yet."
+msgstr "暂无日志输出。"

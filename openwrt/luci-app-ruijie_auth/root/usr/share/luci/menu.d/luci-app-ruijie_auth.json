@@ -1,0 +1,10 @@
+{
+	"admin/services/ruijie_auth": {
+		"title": "Ruijie Auth",
+		"order": 40,
+		"action": {
+			"type": "view",
+			"path": "ruijie_auth"
+		}
+	}
+}

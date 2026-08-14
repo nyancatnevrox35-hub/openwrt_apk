@@ -1,0 +1,14 @@
+{
+	"luci-app-ruijie_auth": {
+		"description": "Grant access to ruijie_auth configuration and logs",
+		"read": {
+			"uci": [ "ruijie_auth" ],
+			"file": {
+				"/var/log/ruijie_auth.log": [ "read" ]
+			}
+		},
+		"write": {
+			"uci": [ "ruijie_auth" ]
+		}
+	}
+}

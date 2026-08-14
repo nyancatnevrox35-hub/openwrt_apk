@@ -1,0 +1,45 @@
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+
+msgid "Ruijie Auth"
+msgstr ""
+
+msgid "Ruijie Authentication"
+msgstr ""
+
+msgid "Configure the Ruijie 802.1X EAP-MD5 authentication client."
+msgstr ""
+
+msgid "Enabled"
+msgstr ""
+
+msgid "Interface"
+msgstr ""
+
+msgid "Username"
+msgstr ""
+
+msgid "Password"
+msgstr ""
+
+msgid "MAC address"
+msgstr ""
+
+msgid "Run DHCP after success"
+msgstr ""
+
+msgid "DHCP command"
+msgstr ""
+
+msgid "Log"
+msgstr ""
+
+msgid "Recent authentication log output."
+msgstr ""
+
+msgid "Refresh"
+msgstr ""
+
+msgid "No log output yet."
+msgstr ""

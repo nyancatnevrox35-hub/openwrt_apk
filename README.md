@@ -79,7 +79,42 @@ vi /etc/config/ruijie_auth   # 填入 username/password,enabled 置 1
 /etc/init.d/ruijie_auth start
 ```
 
-包内含 procd 启动脚本，进程崩溃会自动拉起（`respawn`），配置变更（`/etc/config/ruijie_auth`）后自动重启服务。`--daemon` 选项在 procd 下无需使用（procd 已负责守护），但手动运行仍可用。
+包内含 procd 启动脚本，进程崩溃会自动拉起（`respawn`），配置变更（`/etc/config/ruijie_auth`）后自动重启服务。`--daemon` 选项在 procd 下无需使用（procd 已负责守护），但手动运行仍可用。procd 模式下日志固定写入 `/var/log/ruijie_auth.log`，供 Web 界面读取。
+
+## Web 图形界面（LuCI）
+
+仓库内 `openwrt/luci-app-ruijie_auth/` 是一个 LuCI 应用，提供网页配置与实时日志查看，支持简体中文 / English 切换（跟随 LuCI 系统的语言设置）。
+
+目录结构：
+
+```
+openwrt/luci-app-ruijie_auth/
+├── Makefile                                   # LuCI 应用定义(依赖 luci.mk)
+├── htdocs/luci-static/resources/view/ruijie_auth.js   # 页面视图(表单 + 日志)
+├── root/usr/share/luci/menu.d/...             # 菜单项(服务 -> Ruijie Auth)
+├── root/usr/share/rpcd/acl.d/...              # 读写 UCI 与日志文件的权限
+└── po/
+    ├── templates/ruijie_auth.pot              # 英文源模板
+    └── zh_Hans/ruijie_auth.po                 # 简体中文翻译
+```
+
+### 编译
+
+LuCI 应用使用 `luci.mk`，需放到 LuCI feed 的 `applications/` 目录下：
+
+```sh
+cp -r openwrt/luci-app-ruijie_auth /path/to/luci/feed/applications/
+./scripts/feeds install -a luci-app-ruijie_auth
+make menuconfig          # LuCI -> Applications -> luci-app-ruijie_auth 选中
+make package/luci-app-ruijie_auth/compile V=s
+```
+
+### 使用
+
+1. 安装后登录 LuCI，在 **服务 → Ruijie Auth** 打开页面。
+2. 页面可配置：启用开关、接口、用户名、密码、MAC、认证成功后运行 DHCP、DHCP 命令。
+3. 页面下方 **日志** 区域显示 `/var/log/ruijie_auth.log` 的最近 200 行，点击 **刷新** 更新。
+4. 语言切换：LuCI 系统设置（**系统 → 系统 → 语言和界面**）中选择 `简体中文` 或 `English`，本应用的界面文字随之切换。
 
 ## 运行
 
