@@ -44,6 +44,7 @@
 #include <stdint.h>
 #include <stdarg.h>
 #include <limits.h>
+#include <math.h>
 #include <unistd.h>
 #include <errno.h>
 #include <time.h>
@@ -403,7 +404,7 @@ static int env_int(const char *name, int def) {
     if (!v || !*v) return def;
     char *end = NULL;
     long r = strtol(v, &end, 10);
-    if (!end || *end != '\0' || r > INT_MAX) return def;
+    if (!end || *end != '\0' || r < 0 || r > INT_MAX) return def;
     return (int)r;
 }
 
@@ -498,6 +499,7 @@ struct trailer_builder {
 };
 
 static void tb_put(struct trailer_builder *tb, const void *data, size_t len) {
+    if (len > sizeof(tb->buf) - tb->len) return; /* 防御:实际内容固定为 585 字节 */
     memcpy(tb->buf + tb->len, data, len);
     tb->len += len;
 }
@@ -874,6 +876,7 @@ static int parse_eapol(const uint8_t *packet, size_t len, eapol_frame_t *frame) 
     frame->eap_id = packet[body_off + 1];
     frame->eap_len = ((uint16_t)packet[body_off + 2] << 8) | packet[body_off + 3];
     if (frame->eap_len > frame->eapol_len) return -1;
+    if (frame->eap_len < 4) return -1;
 
     if (frame->eap_code == EAP_REQUEST || frame->eap_code == EAP_RESPONSE) {
         if (frame->eap_len >= 5) {
@@ -1113,6 +1116,7 @@ static int recv_frame(ruijie_client_t *c, double timeout, eapol_frame_t **out) {
 
         int ms = (int)(remaining * 1000);
         if (ms > 1000) ms = 1000;
+        else if (ms < 1) ms = 1;
 
         struct pollfd pfd = { .fd = c->sock, .events = POLLIN };
         int rc = poll(&pfd, 1, ms);
@@ -1460,12 +1464,12 @@ int main(int argc, char *argv[]) {
         log_error("password too long (max %d bytes)", MAX_PASSWORD_LEN);
         return 1;
     }
-    if (opts.timeout <= 0) {
-        log_error("--timeout must be positive");
+    if (!isfinite(opts.timeout) || opts.timeout <= 0) {
+        log_error("--timeout must be a positive finite number");
         return 1;
     }
-    if (opts.retry_delay < 0) {
-        log_error("--retry-delay must be non-negative");
+    if (!isfinite(opts.retry_delay) || opts.retry_delay < 0) {
+        log_error("--retry-delay must be a non-negative finite number");
         return 1;
     }
 
