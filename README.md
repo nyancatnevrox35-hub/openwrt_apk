@@ -31,7 +31,7 @@ mipsel-openwrt-linux-gcc -O2 -o ruijie_auth ruijie_auth.c
 
 ## 构建 OpenWrt / ImmortalWrt 软件包
 
-仓库内 `openwrt/ruijie_auth/` 是一个标准的 OpenWrt 包定义，可直接放入 feed 或 SDK 编译成 `.ipk`。
+仓库内 `openwrt/ruijie_auth/` 是一个标准的 OpenWrt 包定义，可直接放入 feed 或 SDK 编译。同一份 Makefile 无需改动即可产出 `.ipk`（opkg，旧版）或 `.apk`（apk，新版 OpenWrt/ImmortalWrt 主分支）。产物格式由所用工具链的包管理器决定。
 
 目录结构：
 
@@ -60,7 +60,7 @@ make menuconfig          # Network -> ruijie_auth 选中
 make package/ruijie_auth/compile V=s
 ```
 
-产物位于 `bin/packages/<arch>/myfeed/ruijie_auth_1.0.0-1_<arch>.ipk`。
+产物位于 `bin/packages/<arch>/myfeed/`，旧工具链为 `ruijie_auth_1.0.0-1_<arch>.ipk`，apk 工具链为 `ruijie_auth-1.0.0-r1.apk`。
 
 ### 方法二：用 OpenWrt SDK 单独编译
 
@@ -70,7 +70,7 @@ cp -r /path/to/openwrt/ruijie_auth package/
 make package/ruijie_auth/compile V=s
 ```
 
-### 安装与配置
+### 安装与配置（opkg / 旧版）
 
 ```sh
 opkg install ruijie_auth_1.0.0-1_<arch>.ipk
@@ -78,6 +78,25 @@ vi /etc/config/ruijie_auth   # 填入 username/password,enabled 置 1
 /etc/init.d/ruijie_auth enable
 /etc/init.d/ruijie_auth start
 ```
+
+### 安装与配置（apk / 新版 OpenWrt 与 ImmortalWrt）
+
+OpenWrt 主线（snapshot）与 ImmortalWrt 已切换到 apk 包管理器，构建产物为 `.apk`。包名与文件名不带 `_<arch>` 后缀、版本号格式为 `-r<release>`：
+
+```sh
+apk add ./ruijie_auth-1.0.0-r1.apk
+vi /etc/config/ruijie_auth   # 填入 username/password,enabled 置 1
+/etc/init.d/ruijie_auth enable
+/etc/init.d/ruijie_auth start
+```
+
+判断路由器用的是哪种包管理器：
+
+```sh
+which apk   # 存在即 apk,否则用 opkg
+```
+
+> 提示：apk 的包名固定为 `PKG_NAME`（即 `ruijie_auth`）。如需本地 feed 签名校验，apk 离线安装可用 `apk add --allow-untrusted ./xxx.apk`。
 
 包内含 procd 启动脚本，进程崩溃会自动拉起（`respawn`），配置变更（`/etc/config/ruijie_auth`）后自动重启服务。`--daemon` 选项在 procd 下无需使用（procd 已负责守护），但手动运行仍可用。procd 模式下日志固定写入 `/var/log/ruijie_auth.log`，供 Web 界面读取。
 
