@@ -76,19 +76,22 @@ jobs:
       - name: Build luci-app-ruijie_auth
         working-directory: sdk
         run: |
-          # 更新 luci 与 packages feed:luci.mk 来自 luci feed,
-          # 而 luci.mk 的构建依赖 luasrcdiet/host 来自 packages feed
-          ./scripts/feeds update luci packages
-          # 放入应用并重建索引
+          # 更新 base / luci / packages 三个 feed:
+          #   - luci feed     提供 luci.mk 与 luci-base / luci-lib-* 等 Lua 库
+          #   - packages feed 提供 luasrcdiet(luci.mk 的构建依赖)与 cgi-io
+          #   - base feed(immortalwrt 主仓库 package/)提供 lua / ucode / rpcd / libubus
+          #     等运行时依赖。此前未更新 base,导致这些包不在索引里,
+          #     lucihttp 的 lua 绑定找不到 lua.h 而编译失败
+          ./scripts/feeds update base luci packages
+          # 放入应用并重建索引(仅重建上述三个 feed,避免其它未下载 feed 的 find 噪音)
           cp -r "$GITHUB_WORKSPACE/openwrt/luci-app-ruijie_auth" feeds/luci/applications/luci-app-ruijie_auth
-          ./scripts/feeds update -i
-          ./scripts/feeds install -f luci-base luci-app-ruijie_auth luasrcdiet
+          ./scripts/feeds update -i base luci packages
+          # feeds install 会递归解析 builddepends/host 与运行时 depends,
+          # 自动安装 lua / luasrcdiet / rpcd / ucode / cgi-io / liblucihttp-ucode 等
+          ./scripts/feeds install -f luci-app-ruijie_auth luci-base luasrcdiet
           make defconfig
-          # 先编译 lua / ucode,把 lua.h / ucode.h 装进 staging_dir,
-          # 否则 lucihttp 的 lua/ucode 绑定会因缺头文件编译失败
-          make package/lua/compile V=s
-          make package/ucode/compile V=s
-          make package/luci-app-ruijie_auth/compile V=s
+          # 直接编译目标包,依赖链会按正确顺序自动构建(无需手动编译 lua/ucode)
+          make package/luci-app-ruijie_auth/compile -j$(nproc) V=s
 
       - name: Collect packages
         run: |
