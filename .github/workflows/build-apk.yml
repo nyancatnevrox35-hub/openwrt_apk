@@ -67,23 +67,23 @@ jobs:
         working-directory: sdk
         run: |
           cp -r "$GITHUB_WORKSPACE/openwrt/ruijie_auth" package/ruijie_auth
+          # 新包不在 .config 中,需显式选中并用非交互的 defconfig 刷新 .config,
+          # 否则 make 会尝试调用交互式 menuconfig(CI 无 TTY 会报 "Error opening terminal")
+          echo 'CONFIG_PACKAGE_ruijie_auth=m' >> .config
+          make defconfig
           make package/ruijie_auth/compile V=s
 
       - name: Build luci-app-ruijie_auth
         working-directory: sdk
         run: |
-          # 拉取 luci feed(luci.mk 来自该 feed)
+          # 拉取 luci feed(luci.mk 来自该 feed);SDK 自带 feeds.conf.default
+          # 已按快照锁定 commit,update 会自动检出正确版本
           ./scripts/feeds update luci
-          # 尽量对齐快照锁定的 luci 提交,保证可复现
-          LUCI_COMMIT="$(grep 'src-git luci ' feeds.buildinfo | sed -E 's/.*\^([0-9a-f]+).*/\1/' | head -n1)"
-          if [ -n "$LUCI_COMMIT" ]; then
-            git -C feeds/luci fetch --depth 1 origin "$LUCI_COMMIT" || true
-            git -C feeds/luci checkout FETCH_HEAD || true
-          fi
           # 放入应用并重建索引
           cp -r "$GITHUB_WORKSPACE/openwrt/luci-app-ruijie_auth" feeds/luci/applications/luci-app-ruijie_auth
           ./scripts/feeds update -i
           ./scripts/feeds install -p luci -f luci-base luci-app-ruijie_auth
+          make defconfig
           make package/luci-app-ruijie_auth/compile V=s
 
       - name: Collect packages
