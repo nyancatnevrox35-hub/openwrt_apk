@@ -29,6 +29,58 @@ mipsel-openwrt-linux-gcc -O2 -o ruijie_auth ruijie_auth.c
 
 > 注：`isfinite` 为编译期内建宏，无需链接 `-lm`。程序使用原始套接字，运行必须具有 root 权限。
 
+## 构建 OpenWrt / ImmortalWrt 软件包
+
+仓库内 `openwrt/ruijie_auth/` 是一个标准的 OpenWrt 包定义，可直接放入 feed 或 SDK 编译成 `.ipk`。
+
+目录结构：
+
+```
+openwrt/ruijie_auth/
+├── Makefile                 # 包定义(源码取自 src/)
+├── src/ruijie_auth.c        # 源文件(根目录 ruijie_auth.c 的副本,需同步)
+└── files/
+    ├── ruijie_auth.init     # procd 启动脚本
+    └── ruijie_auth.config   # UCI 默认配置
+```
+
+### 方法一：放入自定义 feed
+
+```sh
+# 假设你的 feed 位于 /home/user/myfeed
+cp -r openwrt/ruijie_auth /home/user/myfeed/ruijie_auth
+```
+
+在 OpenWrt 源码根目录 `feeds.conf` 中登记该 feed，然后：
+
+```sh
+./scripts/feeds update -a
+./scripts/feeds install -a ruijie_auth
+make menuconfig          # Network -> ruijie_auth 选中
+make package/ruijie_auth/compile V=s
+```
+
+产物位于 `bin/packages/<arch>/myfeed/ruijie_auth_1.0.0-1_<arch>.ipk`。
+
+### 方法二：用 OpenWrt SDK 单独编译
+
+```sh
+# 在 SDK 根目录,把包目录软链/复制进 package/
+cp -r /path/to/openwrt/ruijie_auth package/
+make package/ruijie_auth/compile V=s
+```
+
+### 安装与配置
+
+```sh
+opkg install ruijie_auth_1.0.0-1_<arch>.ipk
+vi /etc/config/ruijie_auth   # 填入 username/password,enabled 置 1
+/etc/init.d/ruijie_auth enable
+/etc/init.d/ruijie_auth start
+```
+
+包内含 procd 启动脚本，进程崩溃会自动拉起（`respawn`），配置变更（`/etc/config/ruijie_auth`）后自动重启服务。`--daemon` 选项在 procd 下无需使用（procd 已负责守护），但手动运行仍可用。
+
 ## 运行
 
 ### 前台运行（调试）
