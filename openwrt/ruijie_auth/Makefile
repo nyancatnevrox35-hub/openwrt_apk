@@ -13,9 +13,6 @@ PKG_MAINTAINER:=nyancatnevrox35-hub <nyancatnevrox35-hub@users.noreply.github.co
 # 源码未附带明确许可证,分发前请自行确认并补充 PKG_LICENSE
 PKG_LICENSE:=Unknown
 
-# 需要 luci-base/host 提供的 po2lmo 在编译期把 .po 编译成 .lmo 二进制翻译
-PKG_BUILD_DEPENDS:=luci-base/host
-
 include $(INCLUDE_DIR)/package.mk
 
 define Package/ruijie_auth
@@ -43,9 +40,6 @@ endef
 define Build/Compile
 	$(TARGET_CC) $(TARGET_CFLAGS) $(TARGET_LDFLAGS) \
 		-o $(PKG_BUILD_DIR)/ruijie_auth $(PKG_BUILD_DIR)/ruijie_auth.c
-	$(STAGING_DIR_HOST)/bin/po2lmo \
-		$(PKG_BUILD_DIR)/po/zh_Hans/ruijie_auth.po \
-		$(PKG_BUILD_DIR)/ruijie_auth.zh-cn.lmo
 endef
 
 define Package/ruijie_auth/install
@@ -70,8 +64,10 @@ define Package/ruijie_auth/install
 	$(INSTALL_DATA) ./htdocs/luci-static/resources/view/ruijie_auth.js \
 		$(1)/www/luci-static/resources/view/ruijie_auth.js
 
+	# 预编译好的 .lmo(由 po2lmo 从 po/zh_Hans/ruijie_auth.po 生成并提交),
+	# 编译期无需 luci-base/host 的 po2lmo,避免 SDK 下 host 工具未构建的失败。
 	$(INSTALL_DIR) $(1)/usr/lib/lua/luci/i18n
-	$(INSTALL_DATA) $(PKG_BUILD_DIR)/ruijie_auth.zh-cn.lmo \
+	$(INSTALL_DATA) $(PKG_BUILD_DIR)/po/zh_Hans/ruijie_auth.zh-cn.lmo \
 		$(1)/usr/lib/lua/luci/i18n/ruijie_auth.zh-cn.lmo
 endef
 

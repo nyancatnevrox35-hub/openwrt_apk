@@ -1,0 +1,2 @@
+# LuCI compiled translation catalogs are binary — never apply line-ending conversion
+*.lmo binary
