@@ -100,12 +100,28 @@ ruijie_auth -i eth0 -u 学号 -p 密码 --dhcp --daemon --log-file /var/log/ruij
 
 LuCI 界面已整合进 `ruijie_auth` 单包（无需单独安装 luci-app）。登录 LuCI，进入 **服务 → Ruijie Auth**。
 
-页面自上而下：
+页面自上而下四个区域：
 
-1. **状态（Status）**：顶部加粗显示 `运行中`（绿）/ `已停止`（红），随刷新实时更新。
-2. **操作（Actions）**：启动 / 停止 / 重启 / 刷新，经 rpcd 调用 `/etc/init.d/ruijie_auth`。
-3. **配置（Ruijie Authentication）**：标准 CBI 表单（保存 / 保存并应用），字段对应上表。
-4. **日志（Log）**：等宽滚动区，展示 `/var/log/ruijie_auth.log` 最近 200 行。
+```mermaid
+flowchart TB
+    subgraph page["LuCI 页面 · 服务 → Ruijie Auth"]
+        direction TB
+        S["状态（Status）<br/>🟢 运行中 ／ 🔴 已停止"]
+        A["操作（Actions）<br/>启动 · 停止 · 重启 · 刷新"]
+        C["配置（Ruijie Authentication）<br/>启用 · 接口 · 用户名 · 密码<br/>MAC · 服务器列表 · 认证后 DHCP<br/>[ 保存 ] [ 保存并应用 ]"]
+        L["日志（Log）<br/>等宽滚动 · /var/log/ruijie_auth.log · 最近 200 行"]
+        S --> A --> C --> L
+    end
+    style S fill:#d9f2d9,stroke:#2c8b2c,stroke-width:2px
+    style A fill:#d9e6f7,stroke:#2c6ab0,stroke-width:2px
+    style C fill:#fdf3d1,stroke:#d9a520,stroke-width:2px
+    style L fill:#efefef,stroke:#777,stroke-width:2px
+```
+
+- **状态**：顶部加粗显示运行状态，随刷新实时更新。
+- **操作**：按钮经 rpcd 调用 `/etc/init.d/ruijie_auth`。
+- **配置**：标准 CBI 表单，字段对应上文 UCI 字段表。
+- **日志**：展示 `/var/log/ruijie_auth.log` 最近 200 行。
 
 语言跟随 LuCI 系统语言（**系统 → 系统 → 语言和界面** 选 `简体中文` / `English`）即时切换。
 
