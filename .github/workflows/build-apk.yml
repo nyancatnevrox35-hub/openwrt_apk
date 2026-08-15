@@ -21,17 +21,27 @@ on:
         description: '子目标 (Subtarget),如 filogic'
         required: false
         default: 'filogic'
+      create_release:
+        description: '创建 GitHub Release 并附带 .apk'
+        type: boolean
+        required: false
+        default: false
+      release_tag:
+        description: 'Release 版本号(创建 Release 时使用)'
+        required: false
+        default: 'v1.0.0'
 
 permissions:
-  contents: read
+  contents: write
+
+env:
+  TARGET: ${{ github.event.inputs.target || 'mediatek' }}
+  SUBTARGET: ${{ github.event.inputs.subtarget || 'filogic' }}
 
 jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 60
-    env:
-      TARGET: ${{ github.event.inputs.target || 'mediatek' }}
-      SUBTARGET: ${{ github.event.inputs.subtarget || 'filogic' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -97,3 +107,50 @@ jobs:
           name: ruijie-auth-${{ env.TARGET }}-${{ env.SUBTARGET }}-apk
           path: dist/
           if-no-files-found: error
+
+      - name: Build APK feed (packages.adb index)
+        shell: bash
+        run: |
+          set -e
+          APK="$GITHUB_WORKSPACE/sdk/staging_dir/host/bin/apk"
+          FEED="$GITHUB_WORKSPACE/feed/${TARGET}/${SUBTARGET}"
+          mkdir -p "$FEED"
+          find sdk/bin -type f -name '*.apk' -exec cp -v "{}" "$FEED/" ';'
+          ls -la "$FEED/"
+          cd "$FEED"
+          "$APK" mkndx --root "$GITHUB_WORKSPACE/sdk" --keys-dir "$GITHUB_WORKSPACE/sdk" --allow-untrusted --output packages.adb *.apk
+          echo "--- feed ---"
+          ls -la "$FEED/"
+
+      - name: Deploy APK feed to gh-pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./feed
+          publish_branch: gh-pages
+          keep_files: true
+          force_orphan: false
+          commit_message: "feed: ${{ env.TARGET }}/${{ env.SUBTARGET }}"
+          user_name: nyancatnevrox35-hub
+          user_email: nyancatnevrox35-hub@users.noreply.github.com
+
+  release:
+    needs: build
+    if: github.event.inputs.create_release == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download built apk
+        uses: actions/download-artifact@v4
+        with:
+          name: ruijie-auth-${{ env.TARGET }}-${{ env.SUBTARGET }}-apk
+          path: apk/
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.inputs.release_tag || 'v1.0.0' }}
+          name: ruijie-auth ${{ github.event.inputs.release_tag || 'v1.0.0' }}
+          files: apk/*.apk
+          generate_release_notes: true

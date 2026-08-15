@@ -173,6 +173,53 @@ vi /etc/config/ruijie_auth   # 填入 username/password,enabled 置 1
 
 要编译其他架构的包，手动触发时修改 `target` / `subtarget`（对应 `downloads.immortalwrt.org/snapshots/targets/<target>/<subtarget>/`）。例如 MT7621 设备用 `target=ramips`、`subtarget=mt7621`。
 
+## GitHub Releases
+
+编译产出的 `.apk` 可挂到版本化 Release 上，便于下载与归档。
+
+- **自动**：手动触发工作流（Actions → Run workflow）时勾选 `create_release`、填写 `release_tag`（如 `v1.0.0`），编译完成后会自动创建 Release 并附带全部 `.apk`。
+- **手动**：下载 Artifact 后本地执行：
+
+```sh
+gh release create v1.0.0 dist/*.apk --title "ruijie-auth v1.0.0" --notes "锐捷认证客户端"
+```
+
+Release 列表：<https://github.com/nyancatnevrox35-hub/openwrt_apk/releases>
+
+## APK 软件源（在线安装）
+
+工作流每次编译都会生成 ADB 索引 `packages.adb`，与全部 `.apk` 一起推送到 `gh-pages` 分支。仓库为公开仓库，路由器可直接通过 `raw.githubusercontent.com` 匿名拉取安装，无需手动传包。
+
+### 添加软件源
+
+SSH 登录路由器，追加一条软件源（路径按实际 `target/subtarget` 调整）：
+
+```sh
+echo 'https://raw.githubusercontent.com/nyancatnevrox35-hub/openwrt_apk/gh-pages/mediatek/filogic/packages.adb' \
+  >> /etc/apk/repositories.d/customfeeds.list
+```
+
+然后更新索引并安装：
+
+```sh
+apk update --allow-untrusted
+apk add --allow-untrusted ruijie_auth
+```
+
+> 本软件源为**未签名**索引，故需 `--allow-untrusted`。依赖包（`luci-base` / `lua` / `rpcd` / `ucode` / `cgi-io` 等）已一并打入 feed，`apk add` 会自动解析并安装。
+
+装好后按上文配置 `/etc/config/ruijie_auth`（填账号密码、`enabled` 置 1），再 `/etc/init.d/ruijie_auth enable && /etc/init.d/ruijie_auth start` 即可。
+
+### 其他架构
+
+对 `target=ramips`、`subtarget=mt7621` 等设备，把 URL 中的目录换成对应路径：
+
+```sh
+https://raw.githubusercontent.com/nyancatnevrox35-hub/openwrt_apk/gh-pages/ramips/mt7621/packages.adb
+```
+
+> 说明：ImmortalWrt 25.12.x 使用 apk，索引文件为 `packages.adb`（ADB 格式），与 OpenWrt 24.10 的 `Packages` 纯文本索引不同。官方源（`/etc/apk/repositories.d/distfeeds.list`）同样指向各自目录下的 `packages.adb`。
+
 ## 运行
 
 > 装包后二进制位于 `/usr/sbin/ruijie_auth`（已在 `PATH` 中），直接 `ruijie_auth ...` 即可，**不要**用 `./ruijie_auth`（`./` 只在本机源码目录直接编译运行时才用）。路由器上推荐用 `/etc/init.d/ruijie_auth start` 或 LuCI 界面，手动运行主要用于调试。
