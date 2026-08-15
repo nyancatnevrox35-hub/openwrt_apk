@@ -110,15 +110,26 @@ which apk   # 存在即 apk,否则用 opkg
 
 ## Web 图形界面（LuCI）
 
-LuCI 界面已整合进 `ruijie_auth` 单包（无需单独安装 luci-app）。页面提供状态查看、启动 / 停止 / 重启、配置编辑与实时日志查看，支持简体中文 / English 切换（跟随 LuCI 系统的语言设置）。
+LuCI 界面已整合进 `ruijie_auth` 单包（无需单独安装 luci-app）。安装后登录 LuCI，在 **服务 → Ruijie Auth** 打开页面。
 
-安装本包后登录 LuCI，在 **服务 → Ruijie Auth** 打开页面：
+### 页面布局（自上而下）
 
-- **状态**：实时显示守护进程运行状态（`运行中` / `已停止`）。
-- **操作**：启动 / 停止 / 重启 / 刷新按钮，通过 rpcd 调用 `/etc/init.d/ruijie_auth`。
-- **配置**：启用开关、接口、用户名、密码、MAC、认证成功后运行 DHCP、DHCP 命令、认证服务器列表。
-- **日志**：显示 `/var/log/ruijie_auth.log` 的最近日志，点击刷新更新。
-- **语言**：LuCI 系统设置（**系统 → 系统 → 语言和界面**）选 `简体中文` 或 `English`，界面文字随之切换。
+1. **状态（Status）** —— 页面顶部，加粗显示当前运行状态：`运行中`（绿色）/ `已停止`（红色），随刷新实时更新。
+2. **操作（Actions）** —— 一排按钮：**启动 / 停止 / 重启 / 刷新**，通过 rpcd 调用 `/etc/init.d/ruijie_auth` 完成。
+3. **配置（Ruijie Authentication）** —— 标准 CBI 表单，含 **保存 / 保存并应用**：
+   - **启用（Enabled）**：开关，是否随服务运行。
+   - **接口（Interface）**：认证绑定的物理网口，默认 `eth0`。
+   - **用户名（Username）**：认证账号（学号）。
+   - **密码（Password）**：认证密码，密文显示。
+   - **MAC 地址**：可选，留空自动采集网卡 MAC。
+   - **服务器（Servers）**：`;` 分隔的认证服务器列表，留空用内置默认值。
+   - **认证成功后运行 DHCP**：开关，勾选后认证成功自动拉取 IP。
+   - **DHCP 命令**：自定义 DHCP 命令（`%I` = 接口名），仅在上项开启时显示。
+4. **日志（Log）** —— 等宽字体滚动区，展示 `/var/log/ruijie_auth.log` 最近 200 行；无日志时显示「暂无日志输出」。
+
+### 语言切换
+
+页面文字跟随 LuCI 系统语言：在 **系统 → 系统 → 语言和界面** 选择 `简体中文` 或 `English`，界面即时切换。
 
 > 说明：页面通过 rpcd `file.exec` 执行 `/etc/init.d/ruijie_auth {start,stop,restart,status}`。rpcd ACL 已随包安装（`/usr/share/rpcd/acl.d/`），仅授权这些固定命令，不开放任意命令执行。
 
@@ -164,22 +175,24 @@ vi /etc/config/ruijie_auth   # 填入 username/password,enabled 置 1
 
 ## 运行
 
+> 装包后二进制位于 `/usr/sbin/ruijie_auth`（已在 `PATH` 中），直接 `ruijie_auth ...` 即可，**不要**用 `./ruijie_auth`（`./` 只在本机源码目录直接编译运行时才用）。路由器上推荐用 `/etc/init.d/ruijie_auth start` 或 LuCI 界面，手动运行主要用于调试。
+
 ### 前台运行（调试）
 
 ```sh
-./ruijie_auth -i eth0 -u 学号 -p 密码 --debug
+ruijie_auth -i eth0 -u 学号 -p 密码 --debug
 ```
 
 ### 后台守护 + 认证后自动获取 IP
 
 ```sh
-./ruijie_auth -i eth0 -u 学号 -p 密码 --dhcp --daemon --log-file /var/log/ruijie.log
+ruijie_auth -i eth0 -u 学号 -p 密码 --dhcp --daemon --log-file /var/log/ruijie.log
 ```
 
 认证成功后 `--dhcp` 默认执行 `udhcpc -i <接口> -n -q`；需要自定义命令时用 `--dhcp-cmd`：
 
 ```sh
-./ruijie_auth -i eth0 -u 学号 -p 密码 --dhcp-cmd "udhcpc -i %I -n -q -f"
+ruijie_auth -i eth0 -u 学号 -p 密码 --dhcp-cmd "udhcpc -i %I -n -q -f"
 ```
 
 `%I` 会被替换为实际接口名。
