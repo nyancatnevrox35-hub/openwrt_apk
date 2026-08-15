@@ -43,3 +43,30 @@ msgstr ""
 
 msgid "No log output yet."
 msgstr ""
+
+msgid "Servers"
+msgstr ""
+
+msgid "Server addresses, separated by semicolon; leave empty for built-in default"
+msgstr ""
+
+msgid "Status"
+msgstr ""
+
+msgid "Running"
+msgstr ""
+
+msgid "Stopped"
+msgstr ""
+
+msgid "Actions"
+msgstr ""
+
+msgid "Start"
+msgstr ""
+
+msgid "Stop"
+msgstr ""
+
+msgid "Restart"
+msgstr ""

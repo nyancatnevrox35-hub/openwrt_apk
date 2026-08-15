@@ -624,7 +624,8 @@ static int get_ipv6_by_scope(const char *ifname, unsigned int want_scope,
  * 常量字段:版本、Static 标志、服务器列表等
  */
 static size_t build_trailer(uint8_t *out, size_t cap, int kind,
-                            const uint8_t *local_mac, const char *ifname) {
+                            const uint8_t *local_mac, const char *ifname,
+                            const char *servers) {
     struct trailer_builder tb;
     tb.len = 0;
 
@@ -783,8 +784,9 @@ static size_t build_trailer(uint8_t *out, size_t cap, int kind,
         tb_tlv(&tb, 0x79, &v3, 1);
     }
 
-    /* 0x76:认证服务器列表(逆向常量) */
-    tb_tlv(&tb, 0x76, (const uint8_t *)AUTH_SERVERS, strlen(AUTH_SERVERS));
+    /* 0x76:认证服务器列表(可配置,缺省用逆向常量) */
+    if (!servers) servers = AUTH_SERVERS;
+    tb_tlv(&tb, 0x76, (const uint8_t *)servers, strlen(servers));
 
     if (tb.len > cap) return 0;
     memcpy(out, tb.buf, tb.len);
@@ -959,6 +961,7 @@ typedef struct {
     int private_trailer;
     int start_trailer_enabled;
     const char *success_file;
+    const char *servers;
     char dhcp_cmd[512];
     int dhcp_enabled;
 
@@ -1039,7 +1042,7 @@ static void send_with_trailer(ruijie_client_t *c, int kind, uint8_t eapol_type,
     size_t trailer_len = 0;
     if (use_trailer) {
         trailer_len = build_trailer(trailer, sizeof(trailer), kind,
-                                    c->local_mac, c->ifname);
+                                    c->local_mac, c->ifname, c->servers);
         if (trailer_len == 0) {
             log_error("trailer build failed");
             return;
@@ -1409,6 +1412,7 @@ typedef struct {
     int no_private_trailer;
     int debug;
     const char *success_file;
+    const char *servers;
     int daemon;
     const char *log_file;
     int dhcp;
@@ -1434,6 +1438,7 @@ static void print_usage(const char *prog) {
     printf("      --success-file PATH     write this file after EAP Success (or RUIJIE_SUCCESS_FILE)\n");
     printf("      --dhcp                  run DHCP after success (udhcpc -i IFACE -n -q)\n");
     printf("      --dhcp-cmd CMD          run CMD after success (%%I = interface)\n");
+    printf("      --servers LIST          auth servers, ';'-separated (default %s or RUIJIE_SERVERS)\n", AUTH_SERVERS);
     printf("  -d, --daemon                detach and run in background\n");
     printf("      --log-file PATH         append logs to PATH (default /dev/null with --daemon)\n");
     printf("  -h, --help                  show this help\n");
@@ -1452,6 +1457,7 @@ static int parse_args(int argc, char *argv[], options_t *opts) {
     opts->no_private_trailer = 0;
     opts->debug = 0;
     opts->success_file = getenv("RUIJIE_SUCCESS_FILE");
+    opts->servers = getenv("RUIJIE_SERVERS");
     opts->daemon = 0;
     opts->log_file = NULL;
     opts->dhcp = 0;
@@ -1471,6 +1477,7 @@ static int parse_args(int argc, char *argv[], options_t *opts) {
         {"success-file", required_argument, 0, 0},
         {"dhcp", no_argument, 0, 0},
         {"dhcp-cmd", required_argument, 0, 0},
+        {"servers", required_argument, 0, 0},
         {"daemon", no_argument, 0, 'd'},
         {"log-file", required_argument, 0, 0},
         {"help", no_argument, 0, 'h'},
@@ -1519,6 +1526,8 @@ static int parse_args(int argc, char *argv[], options_t *opts) {
                     opts->dhcp = 1;
                 } else if (strcmp(name, "dhcp-cmd") == 0) {
                     opts->dhcp_cmd = optarg;
+                } else if (strcmp(name, "servers") == 0) {
+                    opts->servers = optarg;
                 } else if (strcmp(name, "log-file") == 0) {
                     opts->log_file = optarg;
                 }
@@ -1582,6 +1591,7 @@ int main(int argc, char *argv[]) {
     client.private_trailer = !opts.no_private_trailer;
     client.start_trailer_enabled = (!opts.no_start_trailer && !opts.no_private_trailer);
     client.success_file = opts.success_file;
+    client.servers = opts.servers;
 
     /* DHCP 触发命令:--dhcp-cmd 优先,否则 --dhcp 用默认 udhcpc */
     client.dhcp_enabled = 0;

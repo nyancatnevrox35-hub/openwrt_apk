@@ -63,35 +63,26 @@ jobs:
           echo "SDK extracted:"
           ls sdk | head -n 20
 
-      - name: Build ruijie_auth
+      - name: Build ruijie_auth (daemon + LuCI GUI, single apk)
         working-directory: sdk
         run: |
+          # 更新 base / luci / packages 三个 feed:
+          #   - luci feed     提供 luci-base 及其 host 工具 po2lmo(编译 .lmo 用)
+          #   - packages feed 提供 luasrcdiet 等依赖
+          #   - base feed     提供 lua / ucode / rpcd / libubus 等运行时依赖
+          ./scripts/feeds update base luci packages
+          # 放入单包(整合守护进程 + LuCI 界面 + 中英翻译)
           cp -r "$GITHUB_WORKSPACE/openwrt/ruijie_auth" package/ruijie_auth
+          ./scripts/feeds update -i base luci packages
+          # feeds install 会递归解析 builddepends/host 与运行时 depends,
+          # 自动安装 lua / luasrcdiet / rpcd / ucode / cgi-io / liblucihttp-ucode 等
+          ./scripts/feeds install -f luci-base luasrcdiet
           # 新包不在 .config 中,需显式选中并用非交互的 defconfig 刷新 .config,
           # 否则 make 会尝试调用交互式 menuconfig(CI 无 TTY 会报 "Error opening terminal")
           echo 'CONFIG_PACKAGE_ruijie_auth=m' >> .config
           make defconfig
-          make package/ruijie_auth/compile V=s
-
-      - name: Build luci-app-ruijie_auth
-        working-directory: sdk
-        run: |
-          # 更新 base / luci / packages 三个 feed:
-          #   - luci feed     提供 luci.mk 与 luci-base / luci-lib-* 等 Lua 库
-          #   - packages feed 提供 luasrcdiet(luci.mk 的构建依赖)与 cgi-io
-          #   - base feed(immortalwrt 主仓库 package/)提供 lua / ucode / rpcd / libubus
-          #     等运行时依赖。此前未更新 base,导致这些包不在索引里,
-          #     lucihttp 的 lua 绑定找不到 lua.h 而编译失败
-          ./scripts/feeds update base luci packages
-          # 放入应用并重建索引(仅重建上述三个 feed,避免其它未下载 feed 的 find 噪音)
-          cp -r "$GITHUB_WORKSPACE/openwrt/luci-app-ruijie_auth" feeds/luci/applications/luci-app-ruijie_auth
-          ./scripts/feeds update -i base luci packages
-          # feeds install 会递归解析 builddepends/host 与运行时 depends,
-          # 自动安装 lua / luasrcdiet / rpcd / ucode / cgi-io / liblucihttp-ucode 等
-          ./scripts/feeds install -f luci-app-ruijie_auth luci-base luasrcdiet
-          make defconfig
-          # 直接编译目标包,依赖链会按正确顺序自动构建(无需手动编译 lua/ucode)
-          make package/luci-app-ruijie_auth/compile -j$(nproc) V=s
+          # 直接编译目标包,依赖链(含 luci-base/host 的 po2lmo)会按正确顺序自动构建
+          make package/ruijie_auth/compile -j$(nproc) V=s
 
       - name: Collect packages
         run: |

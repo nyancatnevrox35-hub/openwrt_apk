@@ -1,0 +1,18 @@
+{
+	"luci-app-ruijie_auth": {
+		"description": "Grant access to ruijie_auth configuration and logs",
+		"read": {
+			"uci": [ "ruijie_auth" ],
+			"file": {
+				"/var/log/ruijie_auth.log": [ "read" ],
+				"/etc/init.d/ruijie_auth status": [ "exec" ],
+				"/etc/init.d/ruijie_auth start": [ "exec" ],
+				"/etc/init.d/ruijie_auth stop": [ "exec" ],
+				"/etc/init.d/ruijie_auth restart": [ "exec" ]
+			}
+		},
+		"write": {
+			"uci": [ "ruijie_auth" ]
+		}
+	}
+}

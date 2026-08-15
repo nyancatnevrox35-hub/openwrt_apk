@@ -9,8 +9,11 @@ STOP=10
 PROG=/usr/sbin/ruijie_auth
 CONFIG=ruijie_auth
 
+EXTRA_COMMANDS="status"
+EXTRA_HELP="	status	Show whether the client is running"
+
 start_service() {
-    local enabled iface username password mac dhcp dhcp_cmd
+    local enabled iface username password mac dhcp dhcp_cmd servers
 
     config_load "$CONFIG"
 
@@ -23,6 +26,7 @@ start_service() {
     config_get mac "$CONFIG" mac
     config_get_bool dhcp "$CONFIG" dhcp 0
     config_get dhcp_cmd "$CONFIG" dhcp_cmd
+    config_get servers "$CONFIG" servers
 
     [ -n "$iface" ] || iface="eth0"
     if [ -z "$username" ] || [ -z "$password" ]; then
@@ -35,10 +39,20 @@ start_service() {
     [ -n "$mac" ] && procd_append_param command -m "$mac"
     [ "$dhcp" -eq 1 ] && procd_append_param command --dhcp
     [ -n "$dhcp_cmd" ] && procd_append_param command --dhcp-cmd "$dhcp_cmd"
+    [ -n "$servers" ] && procd_append_param command --servers "$servers"
 
     procd_set_param respawn
     procd_set_param file /etc/config/ruijie_auth
     procd_set_param stdout 1
     procd_set_param stderr 1
     procd_close_instance
+}
+
+status() {
+    if pgrep -f "$PROG" >/dev/null 2>&1; then
+        echo "running"
+        return 0
+    fi
+    echo "stopped"
+    return 1
 }

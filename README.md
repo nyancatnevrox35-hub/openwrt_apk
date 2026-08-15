@@ -13,7 +13,9 @@
 - 后台守护运行（`--daemon`），日志可重定向到文件（`--log-file`）
 - 物理链路断线检测，链路恢复后自动重新认证
 - 失败自动重试、运行时网络错误自动重建套接字
+- 认证服务器列表可配置（`--servers`，为空时使用内置默认值）
 - `SIGINT` / `SIGTERM` 收到后发送 EAPOL-Logoff 并优雅退出
+- LuCI Web 图形界面：状态 / 启动 / 停止 / 重启 / 日志查看，简体中文 / English 切换
 
 ## 编译
 
@@ -37,11 +39,17 @@ mipsel-openwrt-linux-gcc -O2 -o ruijie_auth ruijie_auth.c
 
 ```
 openwrt/ruijie_auth/
-├── Makefile                 # 包定义(源码取自 src/)
+├── Makefile                 # 包定义(守护进程 + LuCI 界面 + 中英翻译,单包)
 ├── src/ruijie_auth.c        # 源文件(根目录 ruijie_auth.c 的副本,需同步)
-└── files/
-    ├── ruijie_auth.init     # procd 启动脚本
-    └── ruijie_auth.config   # UCI 默认配置
+├── files/
+│   ├── ruijie_auth.init     # procd 启动脚本
+│   └── ruijie_auth.config   # UCI 默认配置
+├── htdocs/luci-static/resources/view/ruijie_auth.js   # LuCI 页面视图
+├── root/usr/share/luci/menu.d/...                    # 菜单项(服务 → Ruijie Auth)
+├── root/usr/share/rpcd/acl.d/...                     # rpcd 读写 UCI / 日志 / 启停的 ACL
+└── po/
+    ├── templates/ruijie_auth.pot       # 英文源模板
+    └── zh_Hans/ruijie_auth.po          # 简体中文翻译(编译期 po2lmo 生成 .lmo)
 ```
 
 ### 方法一：放入自定义 feed
@@ -102,38 +110,17 @@ which apk   # 存在即 apk,否则用 opkg
 
 ## Web 图形界面（LuCI）
 
-仓库内 `openwrt/luci-app-ruijie_auth/` 是一个 LuCI 应用，提供网页配置与实时日志查看，支持简体中文 / English 切换（跟随 LuCI 系统的语言设置）。
+LuCI 界面已整合进 `ruijie_auth` 单包（无需单独安装 luci-app）。页面提供状态查看、启动 / 停止 / 重启、配置编辑与实时日志查看，支持简体中文 / English 切换（跟随 LuCI 系统的语言设置）。
 
-目录结构：
+安装本包后登录 LuCI，在 **服务 → Ruijie Auth** 打开页面：
 
-```
-openwrt/luci-app-ruijie_auth/
-├── Makefile                                   # LuCI 应用定义(依赖 luci.mk)
-├── htdocs/luci-static/resources/view/ruijie_auth.js   # 页面视图(表单 + 日志)
-├── root/usr/share/luci/menu.d/...             # 菜单项(服务 -> Ruijie Auth)
-├── root/usr/share/rpcd/acl.d/...              # 读写 UCI 与日志文件的权限
-└── po/
-    ├── templates/ruijie_auth.pot              # 英文源模板
-    └── zh_Hans/ruijie_auth.po                 # 简体中文翻译
-```
+- **状态**：实时显示守护进程运行状态（`运行中` / `已停止`）。
+- **操作**：启动 / 停止 / 重启 / 刷新按钮，通过 rpcd 调用 `/etc/init.d/ruijie_auth`。
+- **配置**：启用开关、接口、用户名、密码、MAC、认证成功后运行 DHCP、DHCP 命令、认证服务器列表。
+- **日志**：显示 `/var/log/ruijie_auth.log` 的最近日志，点击刷新更新。
+- **语言**：LuCI 系统设置（**系统 → 系统 → 语言和界面**）选 `简体中文` 或 `English`，界面文字随之切换。
 
-### 编译
-
-LuCI 应用使用 `luci.mk`，需放到 LuCI feed 的 `applications/` 目录下：
-
-```sh
-cp -r openwrt/luci-app-ruijie_auth /path/to/luci/feed/applications/
-./scripts/feeds install -a luci-app-ruijie_auth
-make menuconfig          # LuCI -> Applications -> luci-app-ruijie_auth 选中
-make package/luci-app-ruijie_auth/compile V=s
-```
-
-### 使用
-
-1. 安装后登录 LuCI，在 **服务 → Ruijie Auth** 打开页面。
-2. 页面可配置：启用开关、接口、用户名、密码、MAC、认证成功后运行 DHCP、DHCP 命令。
-3. 页面下方 **日志** 区域显示 `/var/log/ruijie_auth.log` 的最近 200 行，点击 **刷新** 更新。
-4. 语言切换：LuCI 系统设置（**系统 → 系统 → 语言和界面**）中选择 `简体中文` 或 `English`，本应用的界面文字随之切换。
+> 说明：页面通过 rpcd `file.exec` 执行 `/etc/init.d/ruijie_auth {start,stop,restart,status}`。rpcd ACL 已随包安装（`/usr/share/rpcd/acl.d/`），仅授权这些固定命令，不开放任意命令执行。
 
 ## 云端编译（GitHub Actions）
 
@@ -148,18 +135,27 @@ make package/luci-app-ruijie_auth/compile V=s
 
 ### 下载产物
 
-编译完成后，在该次运行（run）页面底部的 **Artifacts** 下载 `ruijie-auth-<target>-<subtarget>-apk` 压缩包，内含：
+编译完成后，在该次运行（run）页面底部的 **Artifacts** 下载 `ruijie-auth-<target>-<subtarget>-apk` 压缩包。由于 `ruijie_auth` 依赖 `luci-base`（及其 `lua` / `rpcd` / `ucode` / `cgi-io` 等依赖），产物中包含本包及其全部依赖 apk：
 
 ```
-ruijie_auth-1.0.0-r1.apk
-luci-app-ruijie_auth-1.0.0-r1.apk
+ruijie_auth-1.0.0-r1.apk              # 本包(守护进程 + LuCI 界面)
+luci-base-*.apk lua-*.apk rpcd-*.apk ucode-*.apk ...   # 依赖
 ```
 
 ### 安装
 
+把产物中所有 `.apk` 传到路由器后一次性离线安装：
+
 ```sh
-apk add --allow-untrusted ./ruijie_auth-1.0.0-r1.apk
-apk add --allow-untrusted ./luci-app-ruijie_auth-1.0.0-r1.apk
+apk add --allow-untrusted ./*.apk
+```
+
+安装后：
+
+```sh
+vi /etc/config/ruijie_auth   # 填入 username/password,enabled 置 1
+/etc/init.d/ruijie_auth enable
+/etc/init.d/ruijie_auth start
 ```
 
 ### 换架构
@@ -205,6 +201,7 @@ apk add --allow-untrusted ./luci-app-ruijie_auth-1.0.0-r1.apk
 | `--success-file PATH` | 认证成功后写入的文件（或 `RUIJIE_SUCCESS_FILE`） |
 | `--dhcp` | 认证成功后执行 DHCP |
 | `--dhcp-cmd CMD` | 认证成功后执行的命令（`%I` = 接口名） |
+| `--servers LIST` | 认证服务器列表，`;` 分隔（默认内置值，或 `RUIJIE_SERVERS`） |
 | `-d, --daemon` | 后台守护运行 |
 | `--log-file PATH` | 日志追加到文件（守护模式默认 `/dev/null`） |
 | `-h, --help` | 显示帮助 |
@@ -221,6 +218,7 @@ apk add --allow-untrusted ./luci-app-ruijie_auth-1.0.0-r1.apk
 | `RUIJIE_RETRY_DELAY` | `--retry-delay` |
 | `RUIJIE_START_BURST` | `--start-burst` |
 | `RUIJIE_SUCCESS_FILE` | `--success-file` |
+| `RUIJIE_SERVERS` | `--servers` |
 
 命令行参数优先级高于环境变量。
 
@@ -237,7 +235,7 @@ apk add --allow-untrusted ./luci-app-ruijie_auth-1.0.0-r1.apk
 - **明文密码暴露**：`-p` 参数与环境变量会出现在 `ps` 及 `/proc/<pid>/environ` 中，多用户环境下建议用配置文件的只读权限规避。
 - **EAP-MD5 固有弱点**：MD5 挑战响应易受离线字典攻击，这是协议本身的限制，非本实现缺陷。
 - **随机数回退**：优先用 `/dev/urandom`，失败时回退 `rand()`（弱随机，仅用于设备指纹字段，不参与密钥派生）。
-- **认证服务器列表硬编码**：trailer 中的服务器列表为常量 `202.199.30.31;202.199.29.94`，如需修改请编辑源码中的 `AUTH_SERVERS`。
+- **认证服务器默认值内置**：`--servers` 未指定时，trailer 中的服务器列表回退为内置常量 `202.199.30.31;202.199.29.94`；可通过 `--servers` 或 UCI `servers` 覆盖，无需改源码。
 
 ## 许可
 
